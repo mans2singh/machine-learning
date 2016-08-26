@@ -17,17 +17,17 @@ plt.style.use('seaborn-notebook')
 GENE = 'TP53'
 
 
-# In[184]:
+# In[207]:
 
 # Parameter Sweep for Hyperparameters
-n_feature_kept = 500
+n_feature_kept = 5000
 param_fixed = {
     'min_samples': 100,
     'min_samples_split': 4,
 }
 param_grid = {
     'max_depth': [x for x in range(1, 10)],
-    'n_estimators' : [ 10 ** x for x in  range(2,4)]
+    'n_estimators' : [ 10 ** x for x in  range(1,4)]
 }
 
 
@@ -37,13 +37,13 @@ param_grid = {
 
 # ## Load Data
 
-# In[178]:
+# In[208]:
 
 if not os.path.exists('data'):
     os.makedirs('data')
 
 
-# In[179]:
+# In[209]:
 
 url_to_path = {
     # X matrix
@@ -59,33 +59,33 @@ for url, path in url_to_path.items():
         urllib.request.urlretrieve(url, path)
 
 
-# In[180]:
+# In[210]:
 
 get_ipython().run_cell_magic(u'time', u'', u"path = os.path.join('data', 'expression.tsv.bz2')\nX = pd.read_table(path, index_col=0)")
 
 
-# In[181]:
+# In[211]:
 
 get_ipython().run_cell_magic(u'time', u'', u"path = os.path.join('data', 'mutation-matrix.tsv.bz2')\nY = pd.read_table(path, index_col=0)")
 
 
-# In[182]:
+# In[212]:
 
 y = Y[GENE]
 
 
-# In[183]:
+# In[213]:
 
 Y.head(6)
 
 
-# In[169]:
+# In[214]:
 
 # The Series now holds TP53 Mutation Status for each Sample
 y.head(6)
 
 
-# In[185]:
+# In[215]:
 
 # Here are the percentage of tumors with NF1
 y.value_counts(True)
@@ -93,7 +93,7 @@ y.value_counts(True)
 
 # ## Set aside 10% of the data for testing
 
-# In[186]:
+# In[216]:
 
 # Typically, this can only be done where the number of mutations is large enough
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=0)
@@ -102,7 +102,7 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_
 
 # ## Median absolute deviation feature selection
 
-# In[187]:
+# In[217]:
 
 def fs_mad(x, y):
     """    
@@ -117,7 +117,7 @@ feature_select = SelectKBest(fs_mad, k=n_feature_kept)
 
 # ## Define pipeline and Cross validation model fitting
 
-# In[190]:
+# In[218]:
 
 clf = RandomForestClassifier(min_samples_leaf=5, random_state=2)
 # joblib is used to cross-validate in parallel by setting `n_jobs=-1` in GridSearchCV
@@ -130,24 +130,24 @@ pipeline = make_pipeline(
     clf_grid)
 
 
-# In[191]:
+# In[219]:
 
 get_ipython().run_cell_magic(u'time', u'', u'# Fit the model (the computationally intensive part)\npipeline.fit(X=X_train, y=y_train)\nbest_clf = clf_grid.best_estimator_\nfeature_mask = feature_select.get_support()  # Get a boolean array indicating the selected features')
 
 
-# In[192]:
+# In[220]:
 
 clf_grid.best_params_
 
 
-# In[193]:
+# In[221]:
 
 best_clf
 
 
 # ## Visualize hyperparameters performance
 
-# In[194]:
+# In[222]:
 
 def grid_scores_to_df(grid_scores):
     """
@@ -167,13 +167,13 @@ def grid_scores_to_df(grid_scores):
 
 # ## Process Mutation Matrix
 
-# In[195]:
+# In[223]:
 
 cv_score_df = grid_scores_to_df(clf_grid.grid_scores_)
 cv_score_df.head(2)
 
 
-# In[196]:
+# In[224]:
 
 # Cross-validated performance distribution
 facet_grid = sns.factorplot(x='max_depth', y='score', col='n_estimators',
@@ -181,7 +181,7 @@ facet_grid = sns.factorplot(x='max_depth', y='score', col='n_estimators',
 facet_grid.set_ylabels('AUROC');
 
 
-# In[199]:
+# In[225]:
 
 # Cross-validated performance heatmap
 cv_score_mat = pd.pivot_table(cv_score_df, values='score', index='max_depth', columns='n_estimators')
@@ -192,7 +192,7 @@ ax.set_ylabel('(max_depth)');
 
 # ## Use Optimal Hyperparameters to Output ROC Curve
 
-# In[200]:
+# In[226]:
 
 y_pred_train = pipeline.predict_proba(X_train)[:, 1]
 y_pred_test = pipeline.predict_proba(X_test)[:, 1]
@@ -208,7 +208,7 @@ metrics_train = get_threshold_metrics(y_train, y_pred_train)
 metrics_test = get_threshold_metrics(y_test, y_pred_test)
 
 
-# In[201]:
+# In[227]:
 
 # Plot ROC
 plt.figure()
@@ -226,7 +226,7 @@ plt.legend(loc='lower right');
 
 # ## What are the classifier coefficients?
 
-# In[202]:
+# In[228]:
 
 #RandomForestClassifier does not have coefficients.
 
@@ -240,7 +240,7 @@ plt.legend(loc='lower right');
 
 # ## Investigate the predictions
 
-# In[203]:
+# In[229]:
 
 predict_df = pd.DataFrame.from_items([
     ('sample_id', X.index),
@@ -251,13 +251,13 @@ predict_df = pd.DataFrame.from_items([
 predict_df['probability_str'] = predict_df['probability'].apply('{:.1%}'.format)
 
 
-# In[204]:
+# In[230]:
 
 # Top predictions amongst negatives (potential hidden responders)
 predict_df.sort_values('probability', ascending=False).query("status == 0").head(10)
 
 
-# In[205]:
+# In[231]:
 
 # Ignore numpy warning caused by seaborn
 warnings.filterwarnings('ignore', 'using a non-integer number instead of an integer')
