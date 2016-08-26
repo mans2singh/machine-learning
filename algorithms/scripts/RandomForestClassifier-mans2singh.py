@@ -3,7 +3,7 @@
 
 # # Create a RandomForestClassifier model to predict TP53 mutation from gene expression data in TCGA
 
-# In[154]:
+# In[243]:
 
 get_ipython().magic(u'matplotlib inline')
 plt.style.use('seaborn-notebook')
@@ -11,19 +11,20 @@ plt.style.use('seaborn-notebook')
 
 # ## Specify model configuration
 
-# In[155]:
+# In[244]:
 
 # We're going to be building a 'TP53' classifier 
 GENE = 'TP53'
 
 
-# In[207]:
+# In[245]:
 
 # Parameter Sweep for Hyperparameters
 n_feature_kept = 5000
 param_fixed = {
     'min_samples': 100,
     'min_samples_split': 4,
+    'class_weight' : 'balanced'
 }
 param_grid = {
     'max_depth': [x for x in range(1, 10)],
@@ -37,13 +38,13 @@ param_grid = {
 
 # ## Load Data
 
-# In[208]:
+# In[246]:
 
 if not os.path.exists('data'):
     os.makedirs('data')
 
 
-# In[209]:
+# In[247]:
 
 url_to_path = {
     # X matrix
@@ -59,7 +60,7 @@ for url, path in url_to_path.items():
         urllib.request.urlretrieve(url, path)
 
 
-# In[210]:
+# In[248]:
 
 get_ipython().run_cell_magic(u'time', u'', u"path = os.path.join('data', 'expression.tsv.bz2')\nX = pd.read_table(path, index_col=0)")
 
@@ -226,9 +227,30 @@ plt.legend(loc='lower right');
 
 # ## What are the classifier coefficients?
 
-# In[228]:
+# In[233]:
 
-#RandomForestClassifier does not have coefficients.
+best_clf.feature_importances_
+
+
+# In[236]:
+
+feature_importances_df = pd.DataFrame(best_clf.feature_importances_.transpose(), index=X.columns[feature_mask], columns=['weight'])
+feature_importances_df['abs'] = feature_importances_df['weight'].abs()
+feature_importances_df = feature_importances_df.sort_values('abs', ascending=False)
+
+
+# In[237]:
+
+'{:.1%} zero coefficients; {:,} negative and {:,} positive coefficients'.format(
+    (feature_importances_df.weight == 0).mean(),
+    (feature_importances_df.weight < 0).sum(),
+    (feature_importances_df.weight > 0).sum()
+)
+
+
+# In[238]:
+
+feature_importances_df.head(10)
 
 
 # The results are not surprising. TP53 is a transcription modulator and when it mutated in a tumor, the cell goes haywire. This makes finding a transcriptional signature fairly easy. Also, the genes that the classifier uses is interesting, but not necessarily novel.
@@ -240,7 +262,7 @@ plt.legend(loc='lower right');
 
 # ## Investigate the predictions
 
-# In[229]:
+# In[240]:
 
 predict_df = pd.DataFrame.from_items([
     ('sample_id', X.index),
@@ -251,19 +273,24 @@ predict_df = pd.DataFrame.from_items([
 predict_df['probability_str'] = predict_df['probability'].apply('{:.1%}'.format)
 
 
-# In[230]:
+# In[241]:
 
 # Top predictions amongst negatives (potential hidden responders)
 predict_df.sort_values('probability', ascending=False).query("status == 0").head(10)
 
 
-# In[231]:
+# In[242]:
 
 # Ignore numpy warning caused by seaborn
 warnings.filterwarnings('ignore', 'using a non-integer number instead of an integer')
 
 ax = sns.distplot(predict_df.query("status == 0").probability, hist=False, label='Negatives')
 ax = sns.distplot(predict_df.query("status == 1").probability, hist=False, label='Positives')
+
+
+# In[ ]:
+
+
 
 
 # In[ ]:
