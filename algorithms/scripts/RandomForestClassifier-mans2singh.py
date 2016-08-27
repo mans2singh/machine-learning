@@ -227,28 +227,26 @@ plt.legend(loc='lower right');
 
 # ## What are the classifier coefficients?
 
-# In[233]:
+# In[293]:
 
 best_clf.feature_importances_
 
 
-# In[236]:
+# In[294]:
 
 feature_importances_df = pd.DataFrame(best_clf.feature_importances_.transpose(), index=X.columns[feature_mask], columns=['weight'])
-feature_importances_df['abs'] = feature_importances_df['weight'].abs()
-feature_importances_df = feature_importances_df.sort_values('abs', ascending=False)
+feature_importances_df = feature_importances_df.sort_values('weight', ascending=False)
 
 
-# In[237]:
+# In[295]:
 
-'{:.1%} zero coefficients; {:,} negative and {:,} positive coefficients'.format(
+'{:.1%} zero coefficients; and {:,} positive coefficients'.format(
     (feature_importances_df.weight == 0).mean(),
-    (feature_importances_df.weight < 0).sum(),
     (feature_importances_df.weight > 0).sum()
 )
 
 
-# In[238]:
+# In[296]:
 
 feature_importances_df.head(10)
 
@@ -262,7 +260,7 @@ feature_importances_df.head(10)
 
 # ## Investigate the predictions
 
-# In[240]:
+# In[257]:
 
 predict_df = pd.DataFrame.from_items([
     ('sample_id', X.index),
@@ -273,13 +271,13 @@ predict_df = pd.DataFrame.from_items([
 predict_df['probability_str'] = predict_df['probability'].apply('{:.1%}'.format)
 
 
-# In[241]:
+# In[258]:
 
 # Top predictions amongst negatives (potential hidden responders)
 predict_df.sort_values('probability', ascending=False).query("status == 0").head(10)
 
 
-# In[242]:
+# In[259]:
 
 # Ignore numpy warning caused by seaborn
 warnings.filterwarnings('ignore', 'using a non-integer number instead of an integer')
