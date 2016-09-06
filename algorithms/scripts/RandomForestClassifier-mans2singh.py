@@ -3,32 +3,51 @@
 
 # # Create a RandomForestClassifier model to predict TP53 mutation from gene expression data in TCGA
 
-# In[243]:
+# In[1]:
+
+import os
+import urllib
+import random
+import warnings
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn import preprocessing, grid_search
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.cross_validation import train_test_split
+from sklearn.metrics import roc_auc_score, roc_curve
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.feature_selection import SelectKBest
+from statsmodels.robust.scale import mad
 
 get_ipython().magic(u'matplotlib inline')
+import matplotlib.pyplot as plt
 plt.style.use('seaborn-notebook')
 
 
 # ## Specify model configuration
 
-# In[244]:
+# In[2]:
 
 # We're going to be building a 'TP53' classifier 
 GENE = 'TP53'
 
 
-# In[245]:
+# In[3]:
 
 # Parameter Sweep for Hyperparameters
 n_feature_kept = 5000
 param_fixed = {
     'min_samples': 100,
-    'min_samples_split': 4,
     'class_weight' : 'balanced'
 }
 param_grid = {
-    'max_depth': [x for x in range(1, 10)],
-    'n_estimators' : [ 10 ** x for x in  range(1,4)]
+    'max_depth': [x for x in range(1, 5)],
+    'n_estimators' : [ 10 ** x for x in  range(2,4)],
+    'min_samples_split': [ x for x in range(2, 5)]
 }
 
 
@@ -38,13 +57,13 @@ param_grid = {
 
 # ## Load Data
 
-# In[246]:
+# In[4]:
 
 if not os.path.exists('data'):
     os.makedirs('data')
 
 
-# In[247]:
+# In[5]:
 
 url_to_path = {
     # X matrix
@@ -60,33 +79,28 @@ for url, path in url_to_path.items():
         urllib.request.urlretrieve(url, path)
 
 
-# In[248]:
+# In[6]:
 
 get_ipython().run_cell_magic(u'time', u'', u"path = os.path.join('data', 'expression.tsv.bz2')\nX = pd.read_table(path, index_col=0)")
 
 
-# In[211]:
+# In[7]:
 
 get_ipython().run_cell_magic(u'time', u'', u"path = os.path.join('data', 'mutation-matrix.tsv.bz2')\nY = pd.read_table(path, index_col=0)")
 
 
-# In[212]:
+# In[8]:
 
 y = Y[GENE]
 
 
-# In[213]:
-
-Y.head(6)
-
-
-# In[214]:
+# In[9]:
 
 # The Series now holds TP53 Mutation Status for each Sample
 y.head(6)
 
 
-# In[215]:
+# In[10]:
 
 # Here are the percentage of tumors with NF1
 y.value_counts(True)
@@ -94,7 +108,7 @@ y.value_counts(True)
 
 # ## Set aside 10% of the data for testing
 
-# In[216]:
+# In[11]:
 
 # Typically, this can only be done where the number of mutations is large enough
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=0)
@@ -103,7 +117,7 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_
 
 # ## Median absolute deviation feature selection
 
-# In[217]:
+# In[12]:
 
 def fs_mad(x, y):
     """    
@@ -118,7 +132,7 @@ feature_select = SelectKBest(fs_mad, k=n_feature_kept)
 
 # ## Define pipeline and Cross validation model fitting
 
-# In[218]:
+# In[13]:
 
 clf = RandomForestClassifier(min_samples_leaf=5, random_state=2)
 # joblib is used to cross-validate in parallel by setting `n_jobs=-1` in GridSearchCV
@@ -131,24 +145,24 @@ pipeline = make_pipeline(
     clf_grid)
 
 
-# In[219]:
+# In[14]:
 
 get_ipython().run_cell_magic(u'time', u'', u'# Fit the model (the computationally intensive part)\npipeline.fit(X=X_train, y=y_train)\nbest_clf = clf_grid.best_estimator_\nfeature_mask = feature_select.get_support()  # Get a boolean array indicating the selected features')
 
 
-# In[220]:
+# In[15]:
 
 clf_grid.best_params_
 
 
-# In[221]:
+# In[16]:
 
 best_clf
 
 
 # ## Visualize hyperparameters performance
 
-# In[222]:
+# In[17]:
 
 def grid_scores_to_df(grid_scores):
     """
@@ -168,13 +182,13 @@ def grid_scores_to_df(grid_scores):
 
 # ## Process Mutation Matrix
 
-# In[223]:
+# In[18]:
 
 cv_score_df = grid_scores_to_df(clf_grid.grid_scores_)
 cv_score_df.head(2)
 
 
-# In[224]:
+# In[19]:
 
 # Cross-validated performance distribution
 facet_grid = sns.factorplot(x='max_depth', y='score', col='n_estimators',
@@ -182,7 +196,7 @@ facet_grid = sns.factorplot(x='max_depth', y='score', col='n_estimators',
 facet_grid.set_ylabels('AUROC');
 
 
-# In[225]:
+# In[20]:
 
 # Cross-validated performance heatmap
 cv_score_mat = pd.pivot_table(cv_score_df, values='score', index='max_depth', columns='n_estimators')
@@ -191,9 +205,27 @@ ax.set_xlabel('(n_estimators)')
 ax.set_ylabel('(max_depth)');
 
 
+# In[21]:
+
+# Cross-validated performance heatmap
+cv_score_mat = pd.pivot_table(cv_score_df, values='score', index='max_depth', columns='min_samples_split')
+ax = sns.heatmap(cv_score_mat, annot=True, fmt='.1%')
+ax.set_xlabel('(n_estimators)')
+ax.set_ylabel('(max_depth)');
+
+
+# In[22]:
+
+# Cross-validated performance heatmap
+cv_score_mat = pd.pivot_table(cv_score_df, values='score', index='n_estimators', columns='min_samples_split')
+ax = sns.heatmap(cv_score_mat, annot=True, fmt='.1%')
+ax.set_xlabel('(n_estimators)')
+ax.set_ylabel('(max_depth)');
+
+
 # ## Use Optimal Hyperparameters to Output ROC Curve
 
-# In[226]:
+# In[23]:
 
 y_pred_train = pipeline.predict_proba(X_train)[:, 1]
 y_pred_test = pipeline.predict_proba(X_test)[:, 1]
@@ -209,7 +241,7 @@ metrics_train = get_threshold_metrics(y_train, y_pred_train)
 metrics_test = get_threshold_metrics(y_test, y_pred_test)
 
 
-# In[227]:
+# In[24]:
 
 # Plot ROC
 plt.figure()
@@ -227,18 +259,18 @@ plt.legend(loc='lower right');
 
 # ## What are the classifier coefficients?
 
-# In[293]:
+# In[25]:
 
 best_clf.feature_importances_
 
 
-# In[294]:
+# In[26]:
 
 feature_importances_df = pd.DataFrame(best_clf.feature_importances_.transpose(), index=X.columns[feature_mask], columns=['weight'])
 feature_importances_df = feature_importances_df.sort_values('weight', ascending=False)
 
 
-# In[295]:
+# In[27]:
 
 '{:.1%} zero coefficients; and {:,} positive coefficients'.format(
     (feature_importances_df.weight == 0).mean(),
@@ -246,9 +278,14 @@ feature_importances_df = feature_importances_df.sort_values('weight', ascending=
 )
 
 
-# In[296]:
+# In[28]:
 
 feature_importances_df.head(10)
+
+
+# In[29]:
+
+sns.distplot(feature_importances_df['weight'])
 
 
 # The results are not surprising. TP53 is a transcription modulator and when it mutated in a tumor, the cell goes haywire. This makes finding a transcriptional signature fairly easy. Also, the genes that the classifier uses is interesting, but not necessarily novel.
@@ -260,7 +297,7 @@ feature_importances_df.head(10)
 
 # ## Investigate the predictions
 
-# In[257]:
+# In[30]:
 
 predict_df = pd.DataFrame.from_items([
     ('sample_id', X.index),
@@ -271,13 +308,13 @@ predict_df = pd.DataFrame.from_items([
 predict_df['probability_str'] = predict_df['probability'].apply('{:.1%}'.format)
 
 
-# In[258]:
+# In[31]:
 
 # Top predictions amongst negatives (potential hidden responders)
 predict_df.sort_values('probability', ascending=False).query("status == 0").head(10)
 
 
-# In[259]:
+# In[32]:
 
 # Ignore numpy warning caused by seaborn
 warnings.filterwarnings('ignore', 'using a non-integer number instead of an integer')
