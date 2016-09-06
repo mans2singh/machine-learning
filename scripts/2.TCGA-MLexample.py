@@ -60,12 +60,12 @@ param_grid = {
 
 # In[5]:
 
-get_ipython().run_cell_magic('time', '', "path = os.path.join('..', 'download', 'expression-matrix.tsv.bz2')\nX = pd.read_table(path, index_col=0)")
+get_ipython().run_cell_magic('time', '', "path = os.path.join('download', 'expression-matrix.tsv.bz2')\nX = pd.read_table(path, index_col=0)")
 
 
 # In[6]:
 
-get_ipython().run_cell_magic('time', '', "path = os.path.join('..', 'download', 'mutation-matrix.tsv.bz2')\nY = pd.read_table(path, index_col=0)")
+get_ipython().run_cell_magic('time', '', "path = os.path.join('download', 'mutation-matrix.tsv.bz2')\nY = pd.read_table(path, index_col=0)")
 
 
 # In[7]:

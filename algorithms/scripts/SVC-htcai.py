@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# # Create a logistic regression model to predict TP53 mutation from gene expression data in TCGA
+# # Create a Support Vector Machine with rbf kernel to predict TP53 mutation from gene expression data in TCGA
 
 # In[1]:
 
@@ -15,7 +15,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn import preprocessing, grid_search
-from sklearn.linear_model import SGDClassifier
+from sklearn.svm import SVC
 from sklearn.cross_validation import train_test_split
 from sklearn.metrics import roc_auc_score, roc_curve
 from sklearn.pipeline import make_pipeline
@@ -41,14 +41,13 @@ GENE = 'TP53'
 # In[4]:
 
 # Parameter Sweep for Hyperparameters
-n_feature_kept = 500
+n_feature_kept = 2000
 param_fixed = {
-    'loss': 'log',
-    'penalty': 'elasticnet',
+    'kernel': 'rbf'
 }
 param_grid = {
-    'alpha': [10 ** x for x in range(-6, 1)],
-    'l1_ratio': [0, 0.05, 0.1, 0.2, 0.5, 0.8, 0.9, 0.95, 1],
+    'C': [10 ** x for x in range(-1, 4)],
+    'gamma': [10 ** x for x in range(-5, 0)],
 }
 
 
@@ -109,7 +108,7 @@ y.value_counts(True)
 
 # ## Set aside 10% of the data for testing
 
-# In[13]:
+# In[12]:
 
 # Typically, this can only be done where the number of mutations is large enough
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=0)
@@ -118,7 +117,7 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_
 
 # ## Median absolute deviation feature selection
 
-# In[14]:
+# In[13]:
 
 def fs_mad(x, y):
     """    
@@ -133,11 +132,11 @@ feature_select = SelectKBest(fs_mad, k=n_feature_kept)
 
 # ## Define pipeline and Cross validation model fitting
 
-# In[15]:
+# In[14]:
 
 # Include loss='log' in param_grid doesn't work with pipeline somehow
-clf = SGDClassifier(random_state=0, class_weight='balanced',
-                    loss=param_fixed['loss'], penalty=param_fixed['penalty'])
+clf = SVC(random_state=0, class_weight='balanced',
+                    kernel=param_fixed['kernel'])
 
 # joblib is used to cross-validate in parallel by setting `n_jobs=-1` in GridSearchCV
 # Supress joblib warning. See https://github.com/scikit-learn/scikit-learn/issues/6370
@@ -149,24 +148,24 @@ pipeline = make_pipeline(
     clf_grid)
 
 
-# In[16]:
+# In[15]:
 
 get_ipython().run_cell_magic('time', '', '# Fit the model (the computationally intensive part)\npipeline.fit(X=X_train, y=y_train)\nbest_clf = clf_grid.best_estimator_\nfeature_mask = feature_select.get_support()  # Get a boolean array indicating the selected features')
 
 
-# In[17]:
+# In[16]:
 
 clf_grid.best_params_
 
 
-# In[18]:
+# In[17]:
 
 best_clf
 
 
 # ## Visualize hyperparameters performance
 
-# In[19]:
+# In[18]:
 
 def grid_scores_to_df(grid_scores):
     """
@@ -186,32 +185,32 @@ def grid_scores_to_df(grid_scores):
 
 # ## Process Mutation Matrix
 
-# In[20]:
+# In[19]:
 
 cv_score_df = grid_scores_to_df(clf_grid.grid_scores_)
 cv_score_df.head(2)
 
 
-# In[21]:
+# In[20]:
 
 # Cross-validated performance distribution
-facet_grid = sns.factorplot(x='l1_ratio', y='score', col='alpha',
+facet_grid = sns.factorplot(x='C', y='score', col='gamma',
     data=cv_score_df, kind='violin', size=4, aspect=1)
 facet_grid.set_ylabels('AUROC');
 
 
-# In[22]:
+# In[21]:
 
 # Cross-validated performance heatmap
-cv_score_mat = pd.pivot_table(cv_score_df, values='score', index='l1_ratio', columns='alpha')
+cv_score_mat = pd.pivot_table(cv_score_df, values='score', index='C', columns='gamma')
 ax = sns.heatmap(cv_score_mat, annot=True, fmt='.1%')
-ax.set_xlabel('Regularization strength multiplier (alpha)')
-ax.set_ylabel('Elastic net mixing parameter (l1_ratio)');
+ax.set_xlabel('Kernel coefficient (gamma)')
+ax.set_ylabel('Penalty parameter of the error term (C)');
 
 
 # ## Use Optimal Hyperparameters to Output ROC Curve
 
-# In[23]:
+# In[22]:
 
 y_pred_train = pipeline.decision_function(X_train)
 y_pred_test = pipeline.decision_function(X_test)
@@ -227,7 +226,7 @@ metrics_train = get_threshold_metrics(y_train, y_pred_train)
 metrics_test = get_threshold_metrics(y_test, y_pred_test)
 
 
-# In[24]:
+# In[23]:
 
 # Plot ROC
 plt.figure()
@@ -244,66 +243,53 @@ plt.legend(loc='lower right');
 
 
 # ## What are the classifier coefficients?
-
-# In[25]:
-
-coef_df = pd.DataFrame(best_clf.coef_.transpose(), index=X.columns[feature_mask], columns=['weight'])
-coef_df['abs'] = coef_df['weight'].abs()
-coef_df = coef_df.sort_values('abs', ascending=False)
-
-
-# In[26]:
-
-'{:.1%} zero coefficients; {:,} negative and {:,} positive coefficients'.format(
-    (coef_df.weight == 0).mean(),
-    (coef_df.weight < 0).sum(),
-    (coef_df.weight > 0).sum()
-)
-
-
-# In[27]:
-
-coef_df.head(10)
-
-
-# The results are not surprising. TP53 is a transcription modulator and when it mutated in a tumor, the cell goes haywire. This makes finding a transcriptional signature fairly easy. Also, the genes that the classifier uses is interesting, but not necessarily novel.
 # 
-# 1. TP53 is a [transcription factor](https://en.wikipedia.org/wiki/Transcription_factor "TF wiki") that regulates many genes including EDA2R. Studies have linked EDA2R (or XEDAR) to [increased survival in colon cancer patients](http://www.ncbi.nlm.nih.gov/pubmed/19543321) and [losing hair as a result of chemotherapy](http://onlinelibrary.wiley.com/doi/10.1016/j.febslet.2010.04.058/full)
-# 2. SPATA18 is a gene associated with spermatogenesis and is a transcription factor for TP53. It's association with TP53 was [recently discovered](http://www.ncbi.nlm.nih.gov/pubmed/21300779) in 2011.
-# 3. C6orf138 (or [PTCHD4](http://www.genecards.org/cgi-bin/carddisp.pl?gene=PTCHD4)) is also a transcriptional target for TP53 and was only recently discovered in [2014 to repress hedgehog signalling](http://www.ncbi.nlm.nih.gov/pmc/articles/PMC4239647/).
-# 4. The list goes on and includes several other TP53 targets...
+# coef_ is only available when using a linear kernel
 
 # ## Investigate the predictions
 
-# In[28]:
+# In[24]:
 
 predict_df = pd.DataFrame.from_items([
     ('sample_id', X.index),
     ('testing', X.index.isin(X_test.index).astype(int)),
     ('status', y),
     ('decision_function', pipeline.decision_function(X)),
-    ('probability', pipeline.predict_proba(X)[:, 1]),
+    ('probability', pipeline.predict(X)),
 ])
 predict_df['probability_str'] = predict_df['probability'].apply('{:.1%}'.format)
 
 
-# In[29]:
+# In[25]:
 
 # Top predictions amongst negatives (potential hidden responders)
 predict_df.sort_values('decision_function', ascending=False).query("status == 0").head(10)
 
 
-# In[30]:
+# In[26]:
 
 # Ignore numpy warning caused by seaborn
 warnings.filterwarnings('ignore', 'using a non-integer number instead of an integer')
 
-ax = sns.distplot(predict_df.query("status == 0").decision_function, hist=False, label='Negatives')
-ax = sns.distplot(predict_df.query("status == 1").decision_function, hist=False, label='Positives')
+ax = sns.distplot(predict_df.query("status == 0").decision_function, hist=False, label='Negatives', color = 'red')
+ax = sns.distplot(predict_df.query("status == 1").decision_function, hist=False, label='Positives', color = 'green')
 
 
-# In[31]:
+# In[27]:
 
-ax = sns.distplot(predict_df.query("status == 0").probability, hist=False, label='Negatives')
-ax = sns.distplot(predict_df.query("status == 1").probability, hist=False, label='Positives')
+from sklearn.metrics import confusion_matrix
+conf_mat = confusion_matrix(predict_df.query("testing == 1").status, 
+                            predict_df.query("testing == 1").probability, 
+                            labels = [1, 0])
+cols = {'Pos': conf_mat[:,0].tolist(), 'Neg': conf_mat[:,1].tolist()}
+df_conf = pd.DataFrame(cols, index = ['Pos', 'Neg'])[['Pos', 'Neg']]
+df_conf.index.name = 'Label / Predict'
+df_conf
+
+
+# In[28]:
+
+from sklearn.metrics import f1_score
+f1 = f1_score(predict_df.query("testing == 1").status, predict_df.query("testing == 1").probability)
+'The F1 score is {:.3}'.format(f1)
 
