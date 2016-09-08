@@ -3,7 +3,7 @@
 
 # # Create a RandomForestClassifier model to predict TP53 mutation from gene expression data in TCGA
 
-# In[38]:
+# In[33]:
 
 import os
 import urllib
@@ -30,13 +30,13 @@ plt.style.use('seaborn-notebook')
 
 # ## Specify model configuration
 
-# In[39]:
+# In[34]:
 
 # We're going to be building a 'TP53' classifier 
 GENE = 'TP53'
 
 
-# In[40]:
+# In[35]:
 
 # Parameter Sweep for Hyperparameters
 n_feature_kept = 5000
@@ -45,7 +45,7 @@ param_fixed = {
     'class_weight' : 'balanced'
 }
 param_grid = {
-    'max_depth': [x for x in range(1, 5)],
+    'max_depth': [1, 10, 100, 1000],
     'n_estimators' : [ 10 ** x for x in  range(2,4)],
     'min_samples_split': [2,10,50,250]
 }
@@ -57,13 +57,13 @@ param_grid = {
 
 # ## Load Data
 
-# In[41]:
+# In[36]:
 
 if not os.path.exists('data'):
     os.makedirs('data')
 
 
-# In[42]:
+# In[37]:
 
 url_to_path = {
     # X matrix
@@ -79,28 +79,28 @@ for url, path in url_to_path.items():
         urllib.request.urlretrieve(url, path)
 
 
-# In[43]:
+# In[38]:
 
 get_ipython().run_cell_magic(u'time', u'', u"path = os.path.join('data', 'expression.tsv.bz2')\nX = pd.read_table(path, index_col=0)")
 
 
-# In[44]:
+# In[39]:
 
 get_ipython().run_cell_magic(u'time', u'', u"path = os.path.join('data', 'mutation-matrix.tsv.bz2')\nY = pd.read_table(path, index_col=0)")
 
 
-# In[45]:
+# In[40]:
 
 y = Y[GENE]
 
 
-# In[46]:
+# In[41]:
 
 # The Series now holds TP53 Mutation Status for each Sample
 y.head(6)
 
 
-# In[47]:
+# In[42]:
 
 # Here are the percentage of tumors with NF1
 y.value_counts(True)
@@ -108,7 +108,7 @@ y.value_counts(True)
 
 # ## Set aside 10% of the data for testing
 
-# In[48]:
+# In[43]:
 
 # Typically, this can only be done where the number of mutations is large enough
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=0)
@@ -117,7 +117,7 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_
 
 # ## Median absolute deviation feature selection
 
-# In[49]:
+# In[44]:
 
 def fs_mad(x, y):
     """    
@@ -132,7 +132,7 @@ feature_select = SelectKBest(fs_mad, k=n_feature_kept)
 
 # ## Define pipeline and Cross validation model fitting
 
-# In[50]:
+# In[45]:
 
 clf = RandomForestClassifier(min_samples_leaf=5, random_state=2)
 # joblib is used to cross-validate in parallel by setting `n_jobs=-1` in GridSearchCV
@@ -145,24 +145,24 @@ pipeline = make_pipeline(
     clf_grid)
 
 
-# In[51]:
+# In[46]:
 
 get_ipython().run_cell_magic(u'time', u'', u'# Fit the model (the computationally intensive part)\npipeline.fit(X=X_train, y=y_train)\nbest_clf = clf_grid.best_estimator_\nfeature_mask = feature_select.get_support()  # Get a boolean array indicating the selected features')
 
 
-# In[52]:
+# In[47]:
 
 clf_grid.best_params_
 
 
-# In[53]:
+# In[48]:
 
 best_clf
 
 
 # ## Visualize hyperparameters performance
 
-# In[54]:
+# In[49]:
 
 def grid_scores_to_df(grid_scores):
     """
@@ -182,13 +182,13 @@ def grid_scores_to_df(grid_scores):
 
 # ## Process Mutation Matrix
 
-# In[55]:
+# In[50]:
 
 cv_score_df = grid_scores_to_df(clf_grid.grid_scores_)
 cv_score_df.head(2)
 
 
-# In[56]:
+# In[51]:
 
 # Cross-validated performance distribution
 facet_grid = sns.factorplot(x='max_depth', y='score', col='n_estimators',
@@ -196,36 +196,36 @@ facet_grid = sns.factorplot(x='max_depth', y='score', col='n_estimators',
 facet_grid.set_ylabels('AUROC');
 
 
-# In[57]:
+# In[52]:
 
 # Cross-validated performance heatmap
 cv_score_mat = pd.pivot_table(cv_score_df, values='score', index='max_depth', columns='n_estimators')
 ax = sns.heatmap(cv_score_mat, annot=True, fmt='.1%')
-ax.set_xlabel('(max_depth)')
-ax.set_ylabel('(n_estimators)');
+ax.set_xlabel('(n_estimators)')
+ax.set_ylabel('(max_depth)');
 
 
-# In[58]:
+# In[53]:
 
 # Cross-validated performance heatmap
 cv_score_mat = pd.pivot_table(cv_score_df, values='score', index='max_depth', columns='min_samples_split')
 ax = sns.heatmap(cv_score_mat, annot=True, fmt='.1%')
-ax.set_xlabel('(max_depth)')
-ax.set_ylabel('(min_samples_split)');
+ax.set_xlabel('(min_samples_split)')
+ax.set_ylabel('(max_depth)');
 
 
-# In[59]:
+# In[54]:
 
 # Cross-validated performance heatmap
 cv_score_mat = pd.pivot_table(cv_score_df, values='score', index='n_estimators', columns='min_samples_split')
 ax = sns.heatmap(cv_score_mat, annot=True, fmt='.1%')
-ax.set_xlabel('(n_estimators)')
-ax.set_ylabel('(min_samples_split)');
+ax.set_xlabel('(min_samples_split)')
+ax.set_ylabel('(n_estimators)');
 
 
 # ## Use Optimal Hyperparameters to Output ROC Curve
 
-# In[60]:
+# In[55]:
 
 y_pred_train = pipeline.predict_proba(X_train)[:, 1]
 y_pred_test = pipeline.predict_proba(X_test)[:, 1]
@@ -241,7 +241,7 @@ metrics_train = get_threshold_metrics(y_train, y_pred_train)
 metrics_test = get_threshold_metrics(y_test, y_pred_test)
 
 
-# In[61]:
+# In[56]:
 
 # Plot ROC
 plt.figure()
@@ -259,18 +259,18 @@ plt.legend(loc='lower right');
 
 # ## What are the classifier coefficients?
 
-# In[62]:
+# In[57]:
 
 best_clf.feature_importances_
 
 
-# In[63]:
+# In[58]:
 
 feature_importances_df = pd.DataFrame(best_clf.feature_importances_.transpose(), index=X.columns[feature_mask], columns=['weight'])
 feature_importances_df = feature_importances_df.sort_values('weight', ascending=False)
 
 
-# In[64]:
+# In[59]:
 
 '{:.1%} zero coefficients; and {:,} positive coefficients'.format(
     (feature_importances_df.weight == 0).mean(),
@@ -278,12 +278,12 @@ feature_importances_df = feature_importances_df.sort_values('weight', ascending=
 )
 
 
-# In[65]:
+# In[60]:
 
 feature_importances_df.head(10)
 
 
-# In[66]:
+# In[61]:
 
 sns.distplot(feature_importances_df['weight'])
 
@@ -297,7 +297,7 @@ sns.distplot(feature_importances_df['weight'])
 
 # ## Investigate the predictions
 
-# In[67]:
+# In[62]:
 
 predict_df = pd.DataFrame.from_items([
     ('sample_id', X.index),
@@ -308,13 +308,13 @@ predict_df = pd.DataFrame.from_items([
 predict_df['probability_str'] = predict_df['probability'].apply('{:.1%}'.format)
 
 
-# In[68]:
+# In[63]:
 
 # Top predictions amongst negatives (potential hidden responders)
 predict_df.sort_values('probability', ascending=False).query("status == 0").head(10)
 
 
-# In[69]:
+# In[64]:
 
 # Ignore numpy warning caused by seaborn
 warnings.filterwarnings('ignore', 'using a non-integer number instead of an integer')
