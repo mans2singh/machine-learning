@@ -3,7 +3,7 @@
 
 # # Create a logistic regression model to predict TP53 mutation from gene expression data in TCGA
 
-# In[30]:
+# In[6]:
 
 import os
 import urllib
@@ -23,7 +23,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 
 
-# In[31]:
+# In[7]:
 
 get_ipython().magic(u'matplotlib inline')
 plt.style.use('seaborn-notebook')
@@ -31,13 +31,13 @@ plt.style.use('seaborn-notebook')
 
 # ## Specify model configuration
 
-# In[32]:
+# In[8]:
 
 # We're going to be building a 'TP53' classifier 
 GENE = '7157' # TP53
 
 
-# In[33]:
+# In[9]:
 
 # Parameter Sweep for Hyperparameters
 n_feature_kept = 2000
@@ -57,28 +57,28 @@ param_grid = {
 
 # ## Load Data
 
-# In[34]:
+# In[10]:
 
 get_ipython().run_cell_magic(u'time', u'', u"path = os.path.join('..', 'download', 'expression-matrix.tsv.bz2')\nX = pd.read_table(path, index_col=0)")
 
 
-# In[35]:
+# In[11]:
 
 get_ipython().run_cell_magic(u'time', u'', u"path = os.path.join('..', 'download', 'mutation-matrix.tsv.bz2')\nY = pd.read_table(path, index_col=0)")
 
 
-# In[36]:
+# In[12]:
 
 y = Y[GENE]
 
 
-# In[37]:
+# In[13]:
 
 # The Series now holds TP53 Mutation Status for each Sample
 y.head(6)
 
 
-# In[38]:
+# In[14]:
 
 # Here are the percentage of tumors with NF1
 y.value_counts(True)
@@ -86,7 +86,7 @@ y.value_counts(True)
 
 # ## Set aside 10% of the data for testing
 
-# In[39]:
+# In[15]:
 
 # Typically, this can only be done where the number of mutations is large enough
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_state=0)
@@ -95,15 +95,15 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, random_
 
 # ## PCA for feature selection
 
-# In[40]:
+# In[16]:
 
 # select the top features with the PCA
-feature_select = PCA(n_components=n_feature_kept)
+feature_transform = PCA(n_components=n_feature_kept)
 
 
 # ## Define pipeline and Cross validation model fitting
 
-# In[41]:
+# In[17]:
 
 # Include loss='log' in param_grid doesn't work with pipeline somehow
 clf = SGDClassifier(random_state=0, class_weight='balanced',
@@ -114,29 +114,29 @@ clf = SGDClassifier(random_state=0, class_weight='balanced',
 warnings.filterwarnings('ignore', message='Changing the shape of non-C contiguous array')
 clf_grid = grid_search.GridSearchCV(estimator=clf, param_grid=param_grid, n_jobs=-1, scoring='roc_auc')
 pipeline = make_pipeline(
-    feature_select,  # Feature selection
+    feature_transform,  # Feature selection
     StandardScaler(),  # Feature scaling
     clf_grid)
 
 
-# In[42]:
+# In[18]:
 
 get_ipython().run_cell_magic(u'time', u'', u'# Fit the model (the computationally intensive part)\npipeline.fit(X=X_train, y=y_train)\nbest_clf = clf_grid.best_estimator_')
 
 
-# In[43]:
+# In[19]:
 
 clf_grid.best_params_
 
 
-# In[44]:
+# In[20]:
 
 best_clf
 
 
 # ## Visualize hyperparameters performance
 
-# In[45]:
+# In[21]:
 
 def grid_scores_to_df(grid_scores):
     """
@@ -156,13 +156,13 @@ def grid_scores_to_df(grid_scores):
 
 # ## Process Mutation Matrix
 
-# In[46]:
+# In[22]:
 
 cv_score_df = grid_scores_to_df(clf_grid.grid_scores_)
 cv_score_df.head(2)
 
 
-# In[47]:
+# In[23]:
 
 # Cross-validated performance distribution
 facet_grid = sns.factorplot(x='l1_ratio', y='score', col='alpha',
@@ -170,7 +170,7 @@ facet_grid = sns.factorplot(x='l1_ratio', y='score', col='alpha',
 facet_grid.set_ylabels('AUROC');
 
 
-# In[48]:
+# In[24]:
 
 # Cross-validated performance heatmap
 cv_score_mat = pd.pivot_table(cv_score_df, values='score', index='l1_ratio', columns='alpha')
@@ -181,7 +181,7 @@ ax.set_ylabel('Elastic net mixing parameter (l1_ratio)');
 
 # ## Use Optimal Hyperparameters to Output ROC Curve
 
-# In[49]:
+# In[25]:
 
 y_pred_train = pipeline.decision_function(X_train)
 y_pred_test = pipeline.decision_function(X_test)
@@ -197,7 +197,7 @@ metrics_train = get_threshold_metrics(y_train, y_pred_train)
 metrics_test = get_threshold_metrics(y_test, y_pred_test)
 
 
-# In[50]:
+# In[26]:
 
 # Plot ROC
 plt.figure()
@@ -215,7 +215,7 @@ plt.legend(loc='lower right');
 
 # ## What are the classifier coefficients?
 
-# In[51]:
+# In[27]:
 
 #coef_df = pd.DataFrame(best_clf.coef_.transpose(), index=X.columns[feature_mask], columns=['weight'])
 coef_df = pd.DataFrame(best_clf.coef_.transpose(), columns=['weight'])
@@ -223,7 +223,7 @@ coef_df['abs'] = coef_df['weight'].abs()
 coef_df = coef_df.sort_values('abs', ascending=False)
 
 
-# In[52]:
+# In[28]:
 
 '{:.1%} zero coefficients; {:,} negative and {:,} positive coefficients'.format(
     (coef_df.weight == 0).mean(),
@@ -232,7 +232,7 @@ coef_df = coef_df.sort_values('abs', ascending=False)
 )
 
 
-# In[53]:
+# In[29]:
 
 coef_df.head(10)
 
@@ -246,7 +246,7 @@ coef_df.head(10)
 
 # ## Investigate the predictions
 
-# In[54]:
+# In[30]:
 
 predict_df = pd.DataFrame.from_items([
     ('sample_id', X.index),
@@ -258,13 +258,13 @@ predict_df = pd.DataFrame.from_items([
 predict_df['probability_str'] = predict_df['probability'].apply('{:.1%}'.format)
 
 
-# In[55]:
+# In[31]:
 
 # Top predictions amongst negatives (potential hidden responders)
 predict_df.sort_values('decision_function', ascending=False).query("status == 0").head(10)
 
 
-# In[56]:
+# In[32]:
 
 # Ignore numpy warning caused by seaborn
 warnings.filterwarnings('ignore', 'using a non-integer number instead of an integer')
@@ -273,8 +273,13 @@ ax = sns.distplot(predict_df.query("status == 0").decision_function, hist=False,
 ax = sns.distplot(predict_df.query("status == 1").decision_function, hist=False, label='Positives')
 
 
-# In[57]:
+# In[33]:
 
 ax = sns.distplot(predict_df.query("status == 0").probability, hist=False, label='Negatives')
 ax = sns.distplot(predict_df.query("status == 1").probability, hist=False, label='Positives')
+
+
+# In[ ]:
+
+
 
